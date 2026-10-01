@@ -33,6 +33,7 @@ import (
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 
 	"github.com/NVIDIA/nvidia-container-toolkit/api/config/v1"
+	"github.com/NVIDIA/nvidia-container-toolkit/internal/info"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/logger"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/platform-support/tegra/csv"
 	"github.com/NVIDIA/nvidia-container-toolkit/pkg/nvcdi"
@@ -42,6 +43,10 @@ import (
 
 const (
 	allDeviceName = "all"
+
+	provenanceGeneratorAnnotation = "nvidia.com/cdi-generator"
+	provenanceVersionAnnotation   = "nvidia.com/toolkit-version"
+	provenanceModeAnnotation      = "nvidia.com/cdi-generation-mode"
 )
 
 type command struct {
@@ -67,7 +72,8 @@ type options struct {
 	disabledHooks      []string
 	enabledHooks       []string
 
-	featureFlags []string
+	featureFlags      []string
+	includeProvenance bool
 
 	csv struct {
 		files               []string
@@ -126,6 +132,12 @@ func (m command) build() *cli.Command {
 				Value:       spec.FormatYAML,
 				Destination: &opts.format,
 				Sources:     cli.EnvVars("NVIDIA_CTK_CDI_GENERATE_OUTPUT_FORMAT"),
+			},
+			&cli.BoolFlag{
+				Name:        "include-provenance",
+				Usage:       "Include non-sensitive generation provenance annotations in the CDI spec. This raises the minimum CDI spec version to v0.6.0.",
+				Destination: &opts.includeProvenance,
+				Sources:     cli.EnvVars("NVIDIA_CTK_CDI_GENERATE_INCLUDE_PROVENANCE"),
 			},
 			&cli.StringFlag{
 				Name:    "mode",
@@ -421,6 +433,10 @@ func (m command) generateSpecs(opts *options) ([]generatedSpecs, error) {
 		spec.WithPermissions(0644),
 	}
 
+	if annotations := generationProvenanceAnnotations(opts); annotations != nil {
+		commonSpecOptions = append(commonSpecOptions, spec.WithAnnotations(annotations))
+	}
+
 	if !opts.noAllDevice {
 		commonSpecOptions = append(commonSpecOptions,
 			spec.WithMergedDeviceOptions(
@@ -501,4 +517,16 @@ func (d deviceSpecs) splitOnAnnotation(key string) map[string][]specs.Device {
 	}
 
 	return splitSpecs
+}
+
+
+func generationProvenanceAnnotations(opts *options) map[string]string {
+	if !opts.includeProvenance {
+		return nil
+	}
+	return map[string]string{
+		provenanceGeneratorAnnotation: "nvidia-ctk",
+		provenanceVersionAnnotation:   info.GetVersionParts()[0],
+		provenanceModeAnnotation:      opts.mode,
+	}
 }
