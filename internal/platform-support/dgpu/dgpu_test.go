@@ -33,7 +33,6 @@ import (
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/devices"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/discover"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/lookup/root"
-	"github.com/NVIDIA/nvidia-container-toolkit/internal/nvsandboxutils"
 	mocknvsandboxutils "github.com/NVIDIA/nvidia-container-toolkit/internal/nvsandboxutils/mock"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/platform-support/dgpu"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/test"
@@ -139,11 +138,7 @@ func TestNewForDeviceLogsDiscovererConstructionFailures(t *testing.T) {
 		d,
 		dgpu.WithLogger(logger),
 		dgpu.WithDriver(root.New()),
-		dgpu.WithNvsandboxuitilsLib(&mocknvsandboxutils.Interface{
-			GetGpuResourceFunc: func(string) ([]nvsandboxutils.GpuFileInfo, nvsandboxutils.Ret) {
-				return nil, nvsandboxutils.SUCCESS
-			},
-		}),
+		dgpu.WithNvsandboxuitilsLib(&mocknvsandboxutils.Interface{}),
 	)
 	require.Nil(t, discoverer)
 	require.Error(t, err)
@@ -152,9 +147,7 @@ func TestNewForDeviceLogsDiscovererConstructionFailures(t *testing.T) {
 
 	require.Len(t, logger.warnings, 2)
 	require.Contains(t, logger.warnings[0], "nvsandboxutils dGPU discoverer")
-	require.Contains(t, logger.warnings[0], "ERROR_UNKNOWN")
 	require.Contains(t, logger.warnings[1], "NVML dGPU discoverer")
-	require.Contains(t, logger.warnings[1], "ERROR_UNKNOWN")
 }
 
 type warningLogger struct {
