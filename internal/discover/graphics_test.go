@@ -191,6 +191,68 @@ func TestGraphicsLibrariesDiscoverer(t *testing.T) {
 	}
 }
 
+type fixedDriverVersion string
+
+func (v fixedDriverVersion) Version() (string, error) {
+	return string(v), nil
+}
+
+func TestGraphicsLibrariesDiscovererWithNonRootDriverRoot(t *testing.T) {
+	const driverVersion = "123.45.67"
+
+	logger, _ := testlog.NewNullLogger()
+	driverRoot := t.TempDir()
+	libDir := "/usr/lib/aarch64-linux-gnu"
+
+	files := []string{
+		filepath.Join(libDir, "libcuda.so."+driverVersion),
+		filepath.Join(libDir, "nvidia/xorg/nvidia_drv.so"),
+		filepath.Join(libDir, "nvidia/xorg/libglxserver_nvidia.so."+driverVersion),
+	}
+	for _, path := range files {
+		hostPath := filepath.Join(driverRoot, path)
+		require.NoError(t, os.MkdirAll(filepath.Dir(hostPath), 0o755))
+		require.NoError(t, os.WriteFile(hostPath, nil, 0o644))
+	}
+
+	driver := root.New(
+		root.WithLogger(logger),
+		root.WithDriverRoot(driverRoot),
+		root.WithLibrarySearchPaths(libDir),
+		root.WithVersioner(fixedDriverVersion(driverVersion)),
+	)
+
+	discoverer, err := newGraphicsLibrariesDiscoverer(
+		logger,
+		driver,
+		NewHookCreator(),
+	)
+	require.NoError(t, err)
+
+	mounts, err := discoverer.Mounts()
+	require.NoError(t, err)
+
+	discovered := make(map[string]bool)
+	for _, mount := range mounts {
+		discovered[mount.HostPath] = true
+		require.NotContains(
+			t,
+			mount.HostPath,
+			filepath.Join(driverRoot, driverRoot),
+			"driver root must not be applied twice",
+		)
+	}
+
+	require.True(
+		t,
+		discovered[filepath.Join(driverRoot, libDir, "nvidia/xorg/nvidia_drv.so")],
+	)
+	require.True(
+		t,
+		discovered[filepath.Join(driverRoot, libDir, "nvidia/xorg/libglxserver_nvidia.so."+driverVersion)],
+	)
+}
+
 func TestGraphicsConfigsDiscoverer(t *testing.T) {
 	logger, _ := testlog.NewNullLogger()
 
