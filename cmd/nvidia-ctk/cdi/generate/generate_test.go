@@ -695,3 +695,21 @@ func TestSplitOnAnnotation(t *testing.T) {
 		})
 	}
 }
+
+
+func TestGenerationProvenanceAnnotations(t *testing.T) {
+	t.Run("disabled preserves existing output", func(t *testing.T) {
+		require.Nil(t, generationProvenanceAnnotations(&options{}))
+	})
+
+	t.Run("enabled emits small non-sensitive metadata set", func(t *testing.T) {
+		got := generationProvenanceAnnotations(&options{
+			includeProvenance: true,
+			mode:              "nvml",
+		})
+		require.Equal(t, "nvidia-ctk", got[provenanceGeneratorAnnotation])
+		require.Equal(t, "nvml", got[provenanceModeAnnotation])
+		require.NotEmpty(t, got[provenanceVersionAnnotation])
+		require.Len(t, got, 3)
+	})
+}
