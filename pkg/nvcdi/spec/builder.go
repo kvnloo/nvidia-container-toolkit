@@ -32,6 +32,7 @@ type builder struct {
 	vendor      string
 	class       string
 	deviceSpecs []cdi.Device
+	annotations map[string]string
 	edits       cdi.ContainerEdits
 	format      string
 
@@ -88,6 +89,7 @@ func (o *builder) Build() (*spec, error) {
 		raw = &cdi.Spec{
 			Version:        o.version,
 			Kind:           fmt.Sprintf("%s/%s", o.vendor, o.class),
+			Annotations:    o.annotations,
 			Devices:        o.deviceSpecs,
 			ContainerEdits: o.edits,
 		}
@@ -129,6 +131,13 @@ type Option func(*builder)
 func WithDeviceSpecs(deviceSpecs []cdi.Device) Option {
 	return func(o *builder) {
 		o.deviceSpecs = deviceSpecs
+	}
+}
+
+// WithAnnotations sets top-level CDI spec annotations.
+func WithAnnotations(annotations map[string]string) Option {
+	return func(o *builder) {
+		o.annotations = annotations
 	}
 }
 
