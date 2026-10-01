@@ -48,6 +48,23 @@ func TestSpec(t *testing.T) {
 		expectedSpec     string
 	}{
 		{
+			description: "top-level annotations select CDI v0.6.0",
+			options: []Option{
+				WithVendor("nvidia.com"),
+				WithClass("gpu"),
+				WithAnnotations(map[string]string{"nvidia.com/cdi-generator": "nvidia-ctk"}),
+				WithDeviceSpecs([]specs.Device{{Name: "one"}}),
+			},
+			expectedSpec: `---
+cdiVersion: 0.6.0
+kind: nvidia.com/gpu
+annotations:
+    nvidia.com/cdi-generator: nvidia-ctk
+devices:
+    - name: one
+`,
+		},
+		{
 			description: "version is overridden",
 			options:     []Option{WithVersion("0.8.0"), WithRawSpec(minimalSpec)},
 			expectedSpec: `---
