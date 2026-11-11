@@ -18,9 +18,11 @@
 package dgpu_test
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
+	mocknvml "github.com/NVIDIA/go-nvml/pkg/nvml/mock"
 	testlog "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/require"
 
@@ -31,6 +33,7 @@ import (
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/devices"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/discover"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/lookup/root"
+	mocknvsandboxutils "github.com/NVIDIA/nvidia-container-toolkit/internal/nvsandboxutils/mock"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/platform-support/dgpu"
 	"github.com/NVIDIA/nvidia-container-toolkit/internal/test"
 )
@@ -115,6 +118,49 @@ func TestNewForDevice(t *testing.T) {
 
 	}
 }
+
+func TestNewForDeviceLogsDiscovererConstructionFailures(t *testing.T) {
+	logger := &warningLogger{}
+	devicelib := device.New(&mocknvml.Interface{})
+
+	mockDevice := &mocknvml.Device{
+		GetUUIDFunc: func() (string, nvml.Return) {
+			return "", nvml.ERROR_UNKNOWN
+		},
+		GetMinorNumberFunc: func() (int, nvml.Return) {
+			return 0, nvml.ERROR_UNKNOWN
+		},
+	}
+	d, err := devicelib.NewDevice(mockDevice)
+	require.NoError(t, err)
+
+	discoverer, err := dgpu.NewForDevice(
+		d,
+		dgpu.WithLogger(logger),
+		dgpu.WithDriver(root.New()),
+		dgpu.WithNvsandboxuitilsLib(&mocknvsandboxutils.Interface{}),
+	)
+	require.Nil(t, discoverer)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to get device UUID")
+	require.Contains(t, err.Error(), "error getting GPU device minor number")
+
+	require.Len(t, logger.warnings, 2)
+	require.Contains(t, logger.warnings[0], "nvsandboxutils dGPU discoverer")
+	require.Contains(t, logger.warnings[1], "NVML dGPU discoverer")
+}
+
+type warningLogger struct {
+	warnings []string
+}
+
+func (*warningLogger) Debugf(string, ...any) {}
+func (*warningLogger) Errorf(string, ...any) {}
+func (*warningLogger) Infof(string, ...any) {}
+func (l *warningLogger) Warningf(format string, args ...any) {
+	l.warnings = append(l.warnings, fmt.Sprintf(format, args...))
+}
+func (*warningLogger) Tracef(string, ...any) {}
 
 type mocks struct {
 	nvmllib nvml.Interface
